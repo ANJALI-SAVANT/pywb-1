@@ -12,7 +12,6 @@
 - Executes a fixed, harmless `os.system()` command that writes `pywb-amf-rce` to a temporary marker file.
 - Verifies the marker, stops the server, and removes temporary evidence.
 
-No target or command arguments are accepted. Do not modify it to target systems you do not own or have permission to test.
 
 ### Affected configuration
 

@@ -21,18 +21,15 @@ Expected result:
     [+] Server stopped; temporary evidence cleaned up
 
 The final HTTP 404 occurs during archive lookup after command execution and
-therefore does not indicate failure. The script starts a real loopback server,
-accepts no target or command arguments, and removes temporary evidence after
-successful verification. Do not modify it to target systems you do not own or
-have permission to test.
+therefore does not indicate failure. Temporary evidence is removed after
+successful verification.
 
-Authorized check mode:
+Check mode:
     PYTHONPATH=. .venv/bin/python pocs/amf_poc.py \
       --check http://SERVER:8080/COLLECTION/mp_/http://example.invalid/
 
     Exit 0 = affected, 1 = not affected, 2 = inconclusive. Three true and three
-    sleep 5 probes compare median response times. No files are written and no
-    arbitrary commands are accepted.
+    sleep 5 probes compare median response times. No files are written.
 """
 
 from gevent.monkey import patch_all
@@ -283,7 +280,7 @@ def main() -> int:
     parser.add_argument(
         "--check",
         metavar="URL",
-        help="check an authorized replay URL using harmless true/sleep 5 probes",
+        help="check a replay URL using true/sleep 5 probes",
     )
     args = parser.parse_args()
     if args.check:
