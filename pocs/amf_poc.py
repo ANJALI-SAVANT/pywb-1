@@ -1,9 +1,30 @@
 #!/usr/bin/env python3
-"""Localhost-only default-config pywb PyAMF RCE CTF proof of concept.
+"""Localhost-only default-config pywb PyAMF RCE proof of concept.
 
-Starts an empty collection with no recorder configuration and proves that an
-ordinary replay POST executes a fixed harmless marker command during AMF
-decoding. No target or command arguments are accepted.
+What this demonstrates:
+    An unauthenticated AMF3 replay POST reaches py3AMF class deserialization
+    before archive lookup and executes a fixed, harmless os.system() command.
+    No valid capture, recorder configuration, live origin, or pre-planted files
+    is required.
+
+Validated environment:
+    pywb 2.11.0, Python 3.14.10, py3AMF 0.9.1.
+
+Install and run from the repository root:
+    python -m venv .venv
+    .venv/bin/pip install -r requirements.txt requests
+    PYTHONPATH=. .venv/bin/python pocs/amf_poc.py
+
+Expected result:
+    [+] DEFAULT-CONFIG AMF OS-SYSTEM RCE CONFIRMED: .../amf-rce-proof.txt
+    [+] Marker contents: pywb-amf-rce
+    [+] Server stopped; temporary evidence cleaned up
+
+The final HTTP 404 occurs during archive lookup after command execution and
+therefore does not indicate failure. The script starts a real loopback server,
+accepts no target or command arguments, and removes temporary evidence after
+successful verification. Do not modify it to target systems you do not own or
+have permission to test.
 """
 
 from gevent.monkey import patch_all
